@@ -8,6 +8,7 @@ import re
 import fileinput
 import tkinter as tk
 import logging
+import sqlite3
 
 LOGGING_FORMAT =        '[%(levelname)5s] %(asctime)s %(msecs)3d <%(process)d:%(thread)d:%(threadName)10s> ' + \
                         '{%(filename)s:%(lineno)4d%(funcName)30s} %(message)s'
@@ -71,8 +72,16 @@ def process_findoutmore_txtfile(filename):
             process_findoutmore_txtfile_line(line)
     logging.debug('LEAVE')
 
-#print(HEADWORDS)
-#print(FINDOUTMORE)
+def open_db():
+    logging.debug('ENTER')
+    conn = sqlite3.connect('yoes.db')
+    logging.info('sqlite3.connect: %s', conn)
+    conn.execute('''CREATE TABLE HEADWORDS(
+        ID          INT     PRIMARY KEY NOT NULL,
+        HEADWORD    TEXT                NOT NULL
+        );''')
+    logging.info('CREATE TABLE HEADWORDS')
+    logging.debug('LEAVE')
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -101,6 +110,7 @@ class Application(tk.Frame):
         process_findoutmore_txtfile('findoutmore.txt')
         for i, headword in enumerate(HEADWORDS):
             self.lstHeadwords.insert(i, headword)
+        open_db()
         logging.debug('LEAVE')
 
     def handler_listbox_selected(self, event):
