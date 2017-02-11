@@ -7,173 +7,235 @@ a proper learning sequence.
 import re
 import fileinput
 import tkinter as tk
+import tkinter.ttk as ttk
 import logging
 import sqlite3
 
 LOGGING_FORMAT =        '[%(levelname)5s] %(asctime)s %(msecs)3d <%(process)d:%(thread)d:%(threadName)10s> ' + \
                         '{%(filename)s:%(lineno)4d%(funcName)30s} %(message)s'
 LOGGING_DATE_FORMAT =   '%Y-%m-%d %H:%M:%S'
-LOGGING_FILENAME =      'yoes.log'
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format=LOGGING_FORMAT,
-    datefmt=LOGGING_DATE_FORMAT,
-    filename=LOGGING_FILENAME,
-    filemode='w')
 logging.basicConfig(
     level=logging.INFO,
     format=LOGGING_FORMAT,
     datefmt=LOGGING_DATE_FORMAT,
-    filename=LOGGING_FILENAME,
-    filemode='w')
-logging.basicConfig(
-    level=logging.ERROR,
-    format=LOGGING_FORMAT,
-    datefmt=LOGGING_DATE_FORMAT,
-    filename=LOGGING_FILENAME,
+    filename='yoes.log',
     filemode='w')
 
 logging.info('Start logging ...')
 
-DB = sqlite3.connect('yoes.db')
-logging.info('sqlite3.connect return: %s', DB)
+class YoesStorage:
+    def __init__(self):
+        self.DB_FILENAME =          'yoes.db'
+        self.HEADWORDS_FILENAME =   'headwords.txt'
+        self.FINDOUTMORE_FILENAME = 'findoutmore.txt'
 
-def open_db():
-    logging.debug('ENTER')
-    DB.execute('''CREATE TABLE IF NOT EXISTS HEADWORDS(
-        HEADWORD    TEXT    NOT NULL UNIQUE
-        );''')
-    logging.info('CREATE TABLE HEADWORDS')
-    DB.execute('''CREATE TABLE IF NOT EXISTS FINDOUTMORE(
-        HW          INT     NOT NULL,
-        REF         INT     NOT NULL,
-        TYPE        INT     DEFAULT(0),
-        PRIMARY KEY(HW, REF)
-        );''')
-    logging.info('CREATE TABLE FINDOUTMORE')
-    logging.debug('LEAVE')
+    def open(self):
+        pass
+    def close(self):
+        pass
 
-def insert_headword(headword):
-    logging.debug('ENTER: %s', headword)
-    DB.execute('''INSERT OR REPLACE INTO HEADWORDS VALUES(?);''', headword)
-    logging.info('headword added: %s', headword)
-    logging.debug('LEAVE')
-
-def insert_findoutmore(findoutmore):
-    logging.debug('ENTER: %s', findoutmore)
-    DB.execute('''INSERT OR REPLACE INTO FINDOUTMORE VALUES(?, ?, ?);''', findoutmore)
-    logging.info('findoutmore added: %s', findoutmore)
-    logging.debug('LEAVE')
-
-def query_headwords():
-    logging.debug('ENTER')
-    cursor = DB.execute('''SELECT ROWID, HEADWORD FROM HEADWORDS;''')
-    rows = cursor.fetchall()
-    logging.info('rows: %s', len(rows))
-    logging.debug('LEAVE')
-    return rows
-
-def query_findoutmore(headword):
-    logging.debug('ENTER %s: ', headword)
-    cursor = DB.execute('''SELECT HEADWORD, TYPE FROM HEADWORDS, FINDOUTMORE
-        WHERE HEADWORDS.ROWID = FINDOUTMORE.REF AND FINDOUTMORE.HW = ?;''', [headword])
-    rows = cursor.fetchall()
-    logging.info('rows: %s', len(rows))
-    logging.debug('LEAVE')
-    return rows
+class DbStorage():
+    def db_open(self, dbname):
+        logging.debug('ENTER: %s', dbname)
+        self.__db = sqlite3.connect(dbname)
+        logging.info('db opened: %s', dbname)
+        logging.debug('LEAVE')
     
-    
-HEADWORS_TXTFILE_LINE_PATTERN = re.compile(r'\A([\w\s&]+)\n+\Z')
-FINDOUTMORE_TXTFILE_LINE_PATTERN = re.compile(r'\A(\d+) -> (\d+) : (\d+)\n+\Z')
-
-HEADWORDS = list()
-FINDOUTMORE = list()
-
-def process_headwords_txtfile_line(line):
-    """Get a headword from a line of string from headword.txt."""
-    m = HEADWORS_TXTFILE_LINE_PATTERN.match(line)
-    if m:
-        HEADWORDS.append(m.group(1))
-        insert_headword(m.groups())
-
-def process_findoutmore_txtfile_line(line):
-    """Get a headword from a line of string from findoutmore.txt."""
-    m = FINDOUTMORE_TXTFILE_LINE_PATTERN.match(line)
-    if m:
-        FINDOUTMORE.append(m.groups())
-        insert_findoutmore(m.groups())
-        
-
-def process_headwords_txtfile(filename):
-    """process headword.txt file line by line."""
-    logging.debug('ENTER')
-    logging.info('filename: %s', filename)
-    with fileinput.input(files=filename) as f:
-        for line in f:
-            process_headwords_txtfile_line(line)
-    logging.debug('LEAVE')
-
-def process_findoutmore_txtfile(filename):
-    """process findoutmore.txt file line by line."""
-    logging.debug('ENTER')
-    logging.info('filename: %s', filename)
-    with fileinput.input(files=filename) as f:
-        for line in f:
-            process_findoutmore_txtfile_line(line)
-    logging.debug('LEAVE')
-
-class Application(tk.Frame):
-    def __init__(self, master=None):
+    def db_close(self):
         logging.debug('ENTER')
+        self.__db.close()
+        logging.info('db closed')
+        logging.debug('LEAVE')
+
+    def create_tables(self):
+        logging.debug('ENTER')
+        self.__db.execute('''CREATE TABLE IF NOT EXISTS HEADWORDS(
+            HEADWORD    TEXT    NOT NULL UNIQUE
+            );''')
+        logging.info('CREATE TABLE HEADWORDS')
+        self.__db.execute('''CREATE TABLE IF NOT EXISTS FINDOUTMORE(
+            HW          INT     NOT NULL,
+            REF         INT     NOT NULL,
+            TYPE        INT     DEFAULT(0),
+            PRIMARY KEY(HW, REF)
+            );''')
+        logging.info('CREATE TABLE FINDOUTMORE')
+        logging.debug('LEAVE')
+
+    def insert_headword(self, headword):
+        logging.debug('ENTER: %s', headword)
+        self.__db.execute('''INSERT OR REPLACE INTO HEADWORDS VALUES(?);''', headword)
+        logging.info('headword added: %s', headword)
+        logging.debug('LEAVE')
+
+    def insert_findoutmore(self, findoutmore):
+        logging.debug('ENTER: %s', findoutmore)
+        self.__db.execute('''INSERT OR REPLACE INTO FINDOUTMORE VALUES(?, ?, ?);''', findoutmore)
+        logging.info('findoutmore added: %s', findoutmore)
+        logging.debug('LEAVE')
+
+    def query_headwords(self, key):
+        logging.debug('ENTER')
+        logging.info('key: %s', key)
+        if key == None or key == '':
+            cursor = self.__db.execute('''SELECT ROWID, HEADWORD FROM HEADWORDS;''')
+        else:
+            cursor = self.__db.execute('''SELECT ROWID, HEADWORD FROM HEADWORDS WHERE HEADWORD LIKE ?;''', ['%'+key+'%'])
+        rows = cursor.fetchall()
+        logging.info('rows: %s', len(rows))
+        logging.debug('LEAVE')
+        return rows
+
+    def query_findoutmore(self, headword):
+        logging.debug('ENTER %s: ', headword)
+        cursor = self.__db.execute('''SELECT HEADWORD, TYPE FROM HEADWORDS, FINDOUTMORE
+            WHERE HEADWORDS.ROWID = FINDOUTMORE.REF AND FINDOUTMORE.HW = ?;''', [headword])
+        rows = cursor.fetchall()
+        logging.info('rows: %s', len(rows))
+        logging.debug('LEAVE')
+        return rows
+
+class TxtFileStorage:
+    def __init__(self):
+        self.HEADWORS_TXTFILE_LINE_PATTERN = re.compile(r'\A([\w\s&]+)\n+\Z')
+        self.FINDOUTMORE_TXTFILE_LINE_PATTERN = re.compile(r'\A(\d+) -> (\d+) : (\d+)\n+\Z')
+        self.HEADWORDS = list()
+        self.FINDOUTMORE = list()
+
+    def process_headwords_txtfile_line(self, line):
+        """Get a headword from a line of string from headword.txt."""
+        m = self.HEADWORS_TXTFILE_LINE_PATTERN.match(line)
+        if m:
+            self.HEADWORDS.append(m.group(1))
+            self.insert_headword(m.groups())
+
+    def process_findoutmore_txtfile_line(self, line):
+        """Get a headword from a line of string from findoutmore.txt."""
+        m = self.FINDOUTMORE_TXTFILE_LINE_PATTERN.match(line)
+        if m:
+            self.FINDOUTMORE.append(m.groups())
+            self.insert_findoutmore(m.groups())
+            
+
+    def process_headwords_txtfile(vfilename):
+        """process headword.txt file line by line."""
+        logging.debug('ENTER')
+        logging.info('filename: %s', filename)
+        with fileinput.input(files=filename) as f:
+            for line in f:
+                self.process_headwords_txtfile_line(line)
+        logging.debug('LEAVE')
+
+    def process_findoutmore_txtfile(self, filename):
+        """process findoutmore.txt file line by line."""
+        logging.debug('ENTER')
+        logging.info('filename: %s', filename)
+        with fileinput.input(files=filename) as f:
+            for line in f:
+                self.process_findoutmore_txtfile_line(line)
+        logging.debug('LEAVE')
+
+class YoesApplication(tk.Frame):
+    def __init__(self, master=None):
+        logging.debug('ENTER Application.__init__()')
         tk.Frame.__init__(self, master)
         self.grid(sticky=tk.N+tk.S+tk.E+tk.W)
         self.master.title('The Young Oxford Encyclopedia of Science')
+        self.bind('<Destroy>', self.on_destroy)
+
+        self.db = DbStorage()
+        self.db.db_open('yoes.db')
+        self.txtfile = TxtFileStorage()
+        self.last_query_key = ''
+
         self.create_widgets()
         self.init_widgets()
-        logging.debug('LEAVE')
-
+        logging.debug('LEAVE Application.__init__()')
+    
     def create_widgets(self):
         logging.debug('ENTER')
-        self.btnQuit = tk.Button(self, text="Quit", command=self.quit)
-        self.btnQuit.grid()
+
+        self.var_ent_headword = tk.StringVar()
+        self.entHeadword = tk.Entry(self, textvariable=self.var_ent_headword)
+        self.entHeadword.grid()
+        self.entHeadword.bind('<KeyRelease>', self.on_entHeadword_changed)
+
         self.lstHeadwords = tk.Listbox(self)
         self.lstHeadwords.grid()
-        self.lstHeadwords.bind('<<ListboxSelect>>', self.handler_listbox_selected)
+        self.lstHeadwords.bind('<<ListboxSelect>>', self.on_lstHeadwords_selected)
+
+        self.var_ent_findoutmore = tk.StringVar()
+        self.entFindoutmore = tk.Entry(self, textvariable=self.var_ent_findoutmore)
+        self.entFindoutmore.grid()
+
         self.lstFindoutmore = tk.Listbox(self)
         self.lstFindoutmore.grid()
+        self.lstFindoutmore.bind('<<ListboxSelect>>', self.on_lstFindourmore_selected)
+
         logging.debug('LEAVE')
 
     def init_widgets(self):
         logging.debug('ENTER')
-        #open_db()
-        #process_headwords_txtfile('headwords.txt')
-        #process_findoutmore_txtfile('findoutmore.txt')
-        #for i, headword in enumerate(HEADWORDS):
-        #    self.lstHeadwords.insert(i, headword)
-        rows = query_headwords()
+        rows = self.db.query_headwords('')
         for row in rows:
             self.lstHeadwords.insert(row[0], row[1])
         logging.debug('LEAVE')
 
-    def handler_listbox_selected(self, event):
+    def on_destroy(self, event):
+        logging.debug('ENTER')
+        self.db.db_close()
+        logging.debug('LEAVE')
+
+    def on_entHeadword_changed(self, event):
+        logging.debug('ENTER')
+        key = self.var_ent_headword.get()
+        if (self.last_query_key == key):
+            return True
+
+        self.last_query_key = key
+        logging.info('key: %s', key)
+        rows = self.db.query_headwords(key)
+        self.lstHeadwords.delete(0, tk.END)
+        for row in rows:
+            self.lstHeadwords.insert(tk.END, row[1])
+        self.update_idletasks()
+        logging.debug('LEAVE')
+        return True
+
+    def on_lstHeadwords_selected(self, event):
         logging.debug('ENTER')
         curselection = self.lstHeadwords.curselection()
         logging.info('curselection: %s', curselection)
+
         if curselection == ():
             return
+
+        curselectionstr = self.lstHeadwords.get(curselection[0])
+        logging.info('curselectionstr: %s', curselectionstr)
+        self.var_ent_headword.set(curselectionstr)
+
         self.lstFindoutmore.delete(0, tk.END)
-        #for i, [fr, to, tp] in enumerate(FINDOUTMORE):
-        #    if int(fr) == curselection[0]:
-        #        self.lstFindoutmore.insert(tk.END, HEADWORDS[int(to)])
-        rows = query_findoutmore(curselection[0])
+        rows = self.db.query_findoutmore(curselection[0])
         for row in rows:
             self.lstFindoutmore.insert(tk.END, row[0])
         logging.debug('LEAVE')
+
+    def on_lstFindourmore_selected(self, event):
+        logging.debug('ENTER')
+        curselection = self.lstFindoutmore.curselection()
+        logging.info('curselection: %s', curselection)
+
+        if curselection == ():
+            return
+
+        curselectionstr = self.lstFindoutmore.get(curselection[0])
+        logging.info('curselectionstr: %s', curselectionstr)
+        self.var_ent_findoutmore.set(curselectionstr)
+
+        logging.debug('LEAVE')
         
-app = Application()
+app = YoesApplication()
 app.mainloop()
 
-DB.commit()
-DB.close()
 logging.info('End logging ...')
