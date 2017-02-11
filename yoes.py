@@ -24,27 +24,21 @@ logging.basicConfig(
 
 logging.info('Start logging ...')
 
-class YoesStorage:
-    def __init__(self):
-        self.DB_FILENAME =          'yoes.db'
-        self.HEADWORDS_FILENAME =   'headwords.txt'
-        self.FINDOUTMORE_FILENAME = 'findoutmore.txt'
-
-    def open(self):
-        pass
-    def close(self):
-        pass
-
 class DbStorage():
     def db_open(self, dbname):
         logging.debug('ENTER: %s', dbname)
         self.__db = sqlite3.connect(dbname)
         logging.info('db opened: %s', dbname)
         logging.debug('LEAVE')
-    
-    def db_close(self):
+
+    def db_save(self):
         logging.debug('ENTER')
         self.__db.commit()
+        logging.debug('db saved')
+        logging.debug('LEAVE')
+
+    def db_close(self):
+        logging.debug('ENTER')
         self.__db.close()
         logging.info('db closed')
         logging.debug('LEAVE')
@@ -62,49 +56,55 @@ class DbStorage():
             PRIMARY KEY(FROM_ID, TO_ID)
             );''')
         logging.info('CREATE TABLE FINDOUTMORE')
+        self.__db.execute("""CREATE VIEW IF NOT EXISTS V_FINDOUTMORE(FROM_HEADWORD, TO_HEADWORD, TYPE_ID)
+            AS SELECT H1.HEADWORD, H2.HEADWORD, FINDOUTMORE.TYPE_ID FROM HEADWORDS H1, FINDOUTMORE, HEADWORDS H2
+            WHERE H1.ROWID = FINDOUTMORE.FROM_ID AND H2.ROWID = FINDOUTMORE.TO_ID;""")
+        logging.info('CREATE VIEW V_FINDOUTMORE')
         logging.debug('LEAVE')
 
     def insert_headword(self, headword):
         logging.debug('ENTER: %s', headword)
         self.__db.execute('''INSERT OR REPLACE INTO HEADWORDS VALUES(?);''', [headword])
-        logging.info('headword added: %s', headword)
+        logging.debug('headword added: %s', headword)
         logging.debug('LEAVE')
 
     def insert_findoutmore(self, findoutmore):
         logging.debug('ENTER: %s', findoutmore)
-        self.__db.execute('''INSERT OR REPLACE INTO FINDOUTMORE VALUES(?, ?, ?);''', findoutmore)
-        logging.info('findoutmore added: %s', findoutmore)
+        self.__db.execute('''INSERT OR REPLACE INTO FINDOUTMORE
+            SELECT FROM_ID, TO_ID, ? FROM FINDOUTMORE, HEADWORDS H1, HEADWORDS H2
+            WHERE FROM_ID = H1.ROWID AND TO_ID = H2.ROWID
+            AND H1.HEADWORD = ? AND H2.HEADWORD = ?;''', findoutmore)
+        logging.debug('findoutmore added: %s', findoutmore)
         logging.debug('LEAVE')
 
     def query_headwords(self, key):
         logging.debug('ENTER')
-        logging.info('key: %s', key)
+        logging.debug('key: %s', key)
         if key == None or key == '':
             cursor = self.__db.execute('''SELECT ROWID, HEADWORD FROM HEADWORDS;''')
         else:
-            cursor = self.__db.execute('''SELECT ROWID, HEADWORD FROM HEADWORDS WHERE HEADWORD LIKE ?;''', ['%'+key+'%'])
+            cursor = self.__db.execute('''SELECT ROWID, HEADWORD FROM HEADWORDS
+                WHERE HEADWORD LIKE ?;''', ['%'+key+'%'])
         rows = cursor.fetchall()
-        logging.info('rows: %s', len(rows))
+        logging.debug('rows: %s', len(rows))
         logging.debug('LEAVE')
         return rows
 
     def query_findoutmore(self, headword):
         logging.debug('ENTER: %s', headword)
-        cursor = self.__db.execute('''SELECT H2.HEADWORD FROM HEADWORDS H1, FINDOUTMORE, HEADWORDS H2
-            WHERE H1.ROWID = FINDOUTMORE.FROM_ID AND H2.ROWID = FINDOUTMORE.TO_ID 
-            AND H1.HEADWORD = ?;''', [headword])
+        cursor = self.__db.execute('''SELECT TO_HEADWORD FROM V_FINDOUTMORE 
+            WHERE FROM_HEADWORD = ?;''', [headword])
         rows = cursor.fetchall()
-        logging.info('rows: %s', len(rows))
+        logging.debug('rows: %s', len(rows))
         logging.debug('LEAVE')
         return rows
 
     def query_findoutmore_type(self, headword, findoutmore):
         logging.debug('ENTER: %s -> %s', headword, findoutmore)
-        cursor = self.__db.execute('''SELECT FINDOUTMORE.TYPE_ID FROM HEADWORDS H1, FINDOUTMORE, HEADWORDS H2
-            WHERE H1.ROWID = FINDOUTMORE.FROM_ID AND H2.ROWID = FINDOUTMORE.TO_ID
-            AND H1.HEADWORD = ? AND H2.HEADWORD = ?;''', [headword, findoutmore])
+        cursor = self.__db.execute('''SELECT TYPE_ID FROM V_FINDOUTMORE
+            WHERE FROM_HEADWORD = ? AND TO_HEADWORD = ?;''', [headword, findoutmore])
         row = cursor.fetchone()
-        logging.info('row: %s', row)
+        logging.debug('row: %s', row)
         logging.debug('LEAVE')
         return row
 
@@ -137,7 +137,7 @@ class TxtfileStorage:
     def process_headwords_txtfile(self, filename):
         """process headword.txt file line by line."""
         logging.debug('ENTER')
-        logging.info('filename: %s', filename)
+        logging.debug('filename: %s', filename)
         with fileinput.input(files=filename) as f:
             for line in f:
                 self.process_headwords_txtfile_line(line)
@@ -146,7 +146,7 @@ class TxtfileStorage:
     def process_findoutmore_txtfile(self, filename):
         """process findoutmore.txt file line by line."""
         logging.debug('ENTER')
-        logging.info('filename: %s', filename)
+        logging.debug('filename: %s', filename)
         with fileinput.input(files=filename) as f:
             for line in f:
                 self.process_findoutmore_txtfile_line(line)
@@ -168,6 +168,7 @@ class YoesApplication(tk.Frame):
         #self.db.create_tables()
         #self.txtfile.process_headwords_txtfile('headwords.txt')
         #self.txtfile.process_findoutmore_txtfile('findoutmore.txt')
+        #self.db.db_save()
 
         self.create_widgets()
         self.init_widgets()
@@ -193,10 +194,13 @@ class YoesApplication(tk.Frame):
         self.lstFindoutmore.grid()
         self.lstFindoutmore.bind('<<ListboxSelect>>', self.on_lstFindourmore_selected)
 
-        self.OPTION_LIST_TYPE = ('Undefined', 'Depends', 'Equals')
+        self.OPTION_LIST_TYPE = dict(Undefined=0, Depends=1, RDepends=2)
         self.var_opt_type = tk.StringVar()
-        self.optType = tk.OptionMenu(self, self.var_opt_type, *self.OPTION_LIST_TYPE)
+        self.optType = tk.OptionMenu(self, self.var_opt_type, *self.OPTION_LIST_TYPE.keys())
         self.optType.grid()
+
+        self.btnCommit = tk.Button(self, text='Commit', command=self.commit_modification)
+        self.btnCommit.grid()
 
         logging.debug('LEAVE')
 
@@ -219,7 +223,7 @@ class YoesApplication(tk.Frame):
             return True
 
         self.last_query_headword_key = key
-        logging.info('key: %s', key)
+        logging.debug('key: %s', key)
         rows = self.db.query_headwords(key)
         self.lstHeadwords.delete(0, tk.END)
         for row in rows:
@@ -231,16 +235,16 @@ class YoesApplication(tk.Frame):
     def on_lstHeadwords_selected(self, event):
         logging.debug('ENTER')
         curselection = self.lstHeadwords.curselection()
-        logging.info('curselection: %s', curselection)
+        logging.debug('curselection: %s', curselection)
 
         if curselection == ():
             return
 
         curheadwordstr = self.lstHeadwords.get(curselection[0])
-        logging.info('curselectionstr: %s', curheadwordstr)
+        logging.debug('curselectionstr: %s', curheadwordstr)
         self.var_ent_headword.set(curheadwordstr)
 
-        logging.info('query_findoutmore: %s', curheadwordstr)
+        logging.debug('query_findoutmore: %s', curheadwordstr)
         rows = self.db.query_findoutmore(curheadwordstr)
 
         self.lstFindoutmore.delete(0, tk.END)
@@ -251,7 +255,7 @@ class YoesApplication(tk.Frame):
     def on_lstFindourmore_selected(self, event):
         logging.debug('ENTER')
         curselection = self.lstFindoutmore.curselection()
-        logging.info('curselection: %s', curselection)
+        logging.debug('curselection: %s', curselection)
 
         if curselection == ():
             return
@@ -260,11 +264,22 @@ class YoesApplication(tk.Frame):
         curheadwordstr = self.var_ent_headword.get() 
         self.var_ent_findoutmore.set(curfindourmorestr)
 
-        logging.info('query_findoutmore_type: %s - > %s', curheadwordstr, curfindourmorestr)
+        logging.debug('query_findoutmore_type: %s -> %s', curheadwordstr, curfindourmorestr)
         row = self.db.query_findoutmore_type(curheadwordstr, curfindourmorestr)
-        self.var_opt_type.set(self.OPTION_LIST_TYPE[row[0]])
+        self.var_opt_type.set(list(self.OPTION_LIST_TYPE.keys())[row[0]])
         logging.debug('LEAVE')
-        
+
+    def commit_modification(self):
+        logging.debug('ENTER')
+        findoutmore = [
+            self.OPTION_LIST_TYPE[self.var_opt_type.get()], 
+            self.var_ent_headword.get(), 
+            self.var_ent_findoutmore.get()]
+        logging.info('findoutmore: %s', findoutmore)
+        self.db.insert_findoutmore(findoutmore)
+        self.db.db_save()
+        logging.debug('LEAVE')
+
 app = YoesApplication()
 app.mainloop()
 
