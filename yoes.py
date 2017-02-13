@@ -46,13 +46,14 @@ class DbStorage():
     def create_tables(self):
         logging.debug('ENTER')
         self.__db.execute('''CREATE TABLE IF NOT EXISTS HEADWORDS(
-            HEADWORD    TEXT    NOT NULL UNIQUE
+            HEADWORD    TEXT        NOT NULL UNIQUE
+            LEVEL       INTERGER    NOT NULL DEFAULT(-1)
             );''')
         logging.info('CREATE TABLE HEADWORDS')
         self.__db.execute('''CREATE TABLE IF NOT EXISTS FINDOUTMORE(
-            FROM_ID     INT     NOT NULL,
-            TO_ID       INT     NOT NULL,
-            TYPE_ID     INT     DEFAULT(0),
+            FROM_ID     INT         NOT NULL,
+            TO_ID       INT         NOT NULL,
+            TYPE_ID     INT         DEFAULT(0),
             PRIMARY KEY(FROM_ID, TO_ID)
             );''')
         logging.info('CREATE TABLE FINDOUTMORE')
@@ -264,6 +265,9 @@ class YoesApplication(tk.Frame):
         self.lstHeadwords.bind('<<ListboxSelect>>', on_listbox_select_lstHeadwords)
         self.lstFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstFindoutmore)
         self.lstRFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstRFindoutmore)
+
+        self.trv = ttk.Treeview(self)
+        self.trv.grid(row=0, column=3, rowspan=4, columnspan=4)
 
         self.listbox_showall_headwords(listbox=self.lstHeadwords)
 
