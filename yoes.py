@@ -66,10 +66,10 @@ class DbStorage():
     def query_headwords_bykey(self, key=None):
         logging.info('ENTER: %s', key)
         if key == None or key == '':
-            cursor = self.__db.execute('''SELECT HEADWORD FROM HEADWORDS 
+            cursor = self.__db.execute('''SELECT * FROM HEADWORDS 
                 ORDER BY HEADWORD ASC;''')
         else:
-            cursor = self.__db.execute('''SELECT HEADWORD FROM HEADWORDS WHERE HEADWORD LIKE ?  
+            cursor = self.__db.execute('''SELECT * FROM HEADWORDS WHERE HEADWORD LIKE ?  
                 ORDER BY HEADWORD ASC;''', ['%'+key+'%'])
         rows = cursor.fetchall()
         logging.info('rows: %s', len(rows))
@@ -89,15 +89,6 @@ class DbStorage():
         logging.info('ENTER: %s', from_headword)
         cursor = self.__db.execute('''SELECT TO_HEADWORD FROM V_FINDOUTMORE 
             WHERE FROM_HEADWORD = ? ORDER BY FROM_HEADWORD ASC;''', [from_headword])
-        rows = cursor.fetchall()
-        logging.info('rows: %s', len(rows))
-        logging.debug('LEAVE')
-        return rows
-
-    def query_from_headwords(self, to_headword):
-        logging.info('ENTER: %s', to_headword)
-        cursor = self.__db.execute('''SELECT FROM_HEADWORD FROM V_FINDOUTMORE 
-            WHERE TO_HEADWORD = ? ORDER BY TO_HEADWORD ASC;''', [to_headword])
         rows = cursor.fetchall()
         logging.info('rows: %s', len(rows))
         logging.debug('LEAVE')
@@ -388,6 +379,8 @@ class YoesApplication(tk.Frame):
 
     def commit_findoutmore_modification(self, var_from, var_to, var_type):
         logging.debug('ENTER')
+        if (var_type.get() == ''):
+            return
         from_name = var_from.get()
         to_name = var_to.get()
         type_id = self.OPTION_TYPE_LIST[var_type.get()]
@@ -402,6 +395,8 @@ class YoesApplication(tk.Frame):
 
     def update_headword_level(self):
         logging.debug('ENTER')
+        if (self.var_opt_level.get() == ''):
+            return
         headword = self.var_ent_headword.get()
         level = self.OPTION_LEVEL_LIST[self.var_opt_level.get()]
         logging.info('%s : %s', headword, level)
@@ -412,7 +407,25 @@ class YoesApplication(tk.Frame):
         logging.debug('LEAVE')
 
     def display_hierarchy(self):
-        pass
+        logging.debug('ENTER')
+        self.trvHierarchy.delete(*self.trvHierarchy.get_children())
+
+        rows = self.db.query_headwords_bykey()
+        for row in rows:
+            if row[1] == 0:
+                self.trvHierarchy.insert('', 'end', iid=row[0], text=row[0])
+                self.add_tree_nodes(row[0])
+
+        logging.debug('LEAVE')
+
+    def add_tree_nodes(self, node_name):
+        rows = self.db.query_from_headwords(node_name)
+        for row in rows:
+            sub_node_name = row[0]
+            type_row = self.db.query_type(sub_node_name, node_name)
+            if type_row != None and type_row[0] == 2:
+                self.trvHierarchy.insert(node_name, 'end', iid=sub_node_name, text=sub_node_name)
+                self.add_tree_nodes(sub_node_name)
 
 app = YoesApplication()
 app.mainloop()
