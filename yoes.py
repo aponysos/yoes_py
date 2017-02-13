@@ -65,7 +65,7 @@ class DbStorage():
     def insert_headword(self, headword):
         logging.debug('ENTER: %s', headword)
         self.__db.execute('''INSERT OR REPLACE INTO HEADWORDS VALUES(?);''', [headword])
-        logging.debug('headword added: %s', headword)
+        logging.info('headword added: %s', headword)
         logging.debug('LEAVE')
 
     def insert_findoutmore(self, findoutmore):
@@ -74,7 +74,7 @@ class DbStorage():
             SELECT FROM_ID, TO_ID, ? FROM FINDOUTMORE, HEADWORDS H1, HEADWORDS H2
             WHERE FROM_ID = H1.ROWID AND TO_ID = H2.ROWID
             AND H1.HEADWORD = ? AND H2.HEADWORD = ?;''', findoutmore)
-        logging.debug('findoutmore added: %s', findoutmore)
+        logging.info('findoutmore added: %s', findoutmore)
         logging.debug('LEAVE')
 
     def query_headwords_bykey(self, key=None):
@@ -102,16 +102,25 @@ class DbStorage():
     def query_to_headwords(self, from_headword):
         logging.info('ENTER: %s', from_headword)
         cursor = self.__db.execute('''SELECT TO_HEADWORD FROM V_FINDOUTMORE 
-            WHERE FROM_HEADWORD = ? ORDER BY TO_HEADWORD ASC;''', [from_headword])
+            WHERE FROM_HEADWORD = ? ORDER BY FROM_HEADWORD ASC;''', [from_headword])
         rows = cursor.fetchall()
         logging.info('rows: %s', len(rows))
         logging.debug('LEAVE')
         return rows
 
-    def query_type(self, headword, findoutmore):
-        logging.info('ENTER: %s -> %s', headword, findoutmore)
+    def query_from_headwords(self, to_headword):
+        logging.info('ENTER: %s', to_headword)
+        cursor = self.__db.execute('''SELECT FROM_HEADWORD FROM V_FINDOUTMORE 
+            WHERE TO_HEADWORD = ? ORDER BY TO_HEADWORD ASC;''', [to_headword])
+        rows = cursor.fetchall()
+        logging.info('rows: %s', len(rows))
+        logging.debug('LEAVE')
+        return rows
+
+    def query_type(self, from_headword, to_headword):
+        logging.info('ENTER: %s -> %s', from_headword, to_headword)
         cursor = self.__db.execute('''SELECT TYPE_ID FROM V_FINDOUTMORE
-            WHERE FROM_HEADWORD = ? AND TO_HEADWORD = ?;''', [headword, findoutmore])
+            WHERE FROM_HEADWORD = ? AND TO_HEADWORD = ?;''', [from_headword, to_headword])
         row = cursor.fetchone()
         logging.info('row: %s', row)
         logging.debug('LEAVE')
@@ -216,43 +225,47 @@ class YoesApplication(tk.Frame):
         self.optRType = tk.OptionMenu(self, self.var_opt_rtype, *self.OPTION_LIST_TYPE.keys())
         self.optRType.grid(row=2, column=0)
 
-        self.btnCommit = tk.Button(self, text='Commit', command=self.commit_modification)
+        def on_buttoncommand_btnCommit():
+            self.commit_modification(self.var_ent_headword, self.var_ent_findoutmore, self.var_opt_type)
+        self.btnCommit = tk.Button(self, text='Commit', command=on_buttoncommand_btnCommit)
         self.btnCommit.grid(row=3, column=2)
 
-        self.btnRCommit = tk.Button(self, text='Commit', command=self.commit_modification)
+        def on_buttoncommand_btnRCommit():
+            self.commit_modification(self.var_ent_rfindoutmore, self.var_ent_headword, self.var_opt_rtype)
+        self.btnRCommit = tk.Button(self, text='Commit', command=on_buttoncommand_btnRCommit)
         self.btnRCommit.grid(row=3, column=0)
 
         def on_keyrelease_entHeadwords(event):
-            self.showkey_headwords(listbox=self.lstHeadwords, keystr=self.var_ent_headword.get())
+            self.listbox_showkey_headwords(listbox=self.lstHeadwords, keystr=self.var_ent_headword.get())
         def on_keyrelease_entFindoutmore(event):
-            self.showkey_headwords(listbox=self.lstFindoutmore, keystr=self.var_ent_findoutmore.get())
+            self.listbox_showkey_headwords(listbox=self.lstFindoutmore, keystr=self.var_ent_findoutmore.get())
         def on_keyrelease_entRFindoutmore(event):
-            self.showkey_headwords(listbox=self.lstRFindoutmore, keystr=self.var_ent_rfindoutmore.get())
+            self.listbox_showkey_headwords(listbox=self.lstRFindoutmore, keystr=self.var_ent_rfindoutmore.get())
         self.entHeadword.bind('<KeyRelease>', on_keyrelease_entHeadwords)
         self.entFindoutmore.bind('<KeyRelease>', on_keyrelease_entFindoutmore)
         self.entRFindoutmore.bind('<KeyRelease>', on_keyrelease_entRFindoutmore)
 
         def on_keypress_escape_lstHeadwords(event):
-            self.showall_headwords(listbox=self.lstHeadwords, anchorstr=self.var_ent_headword.get())
+            self.listbox_showall_headwords(listbox=self.lstHeadwords, anchorstr=self.var_ent_headword.get())
         def on_keypress_escape_lstFindoutmore(event):
-            self.showall_headwords(listbox=self.lstFindoutmore, anchorstr=self.var_ent_findoutmore.get())
+            self.listbox_showall_headwords(listbox=self.lstFindoutmore, anchorstr=self.var_ent_findoutmore.get())
         def on_keypress_escape_lstRFindoutmore(event):
-            self.showall_headwords(listbox=self.lstRFindoutmore, anchorstr=self.var_ent_rfindoutmore.get())
+            self.listbox_showall_headwords(listbox=self.lstRFindoutmore, anchorstr=self.var_ent_rfindoutmore.get())
         self.lstHeadwords.bind('<KeyPress-Escape>'  , on_keypress_escape_lstHeadwords)
         self.lstFindoutmore.bind('<KeyPress-Escape>', on_keypress_escape_lstFindoutmore)
         self.lstRFindoutmore.bind('<KeyPress-Escape>', on_keypress_escape_lstRFindoutmore)
 
         def on_listbox_select_lstHeadwords(event):
-            self.select_listbox_item(listbox=self.lstHeadwords, varstr=self.var_ent_headword)
+            self.listbox_select_item(listbox=self.lstHeadwords, varstr=self.var_ent_headword)
         def on_listbox_select_lstFindoutmore(event):
-            self.select_listbox_item(listbox=self.lstFindoutmore, varstr=self.var_ent_findoutmore)
+            self.listbox_select_item(listbox=self.lstFindoutmore, varstr=self.var_ent_findoutmore)
         def on_listbox_select_lstRFindoutmore(event):
-            self.select_listbox_item(listbox=self.lstRFindoutmore, varstr=self.var_ent_rfindoutmore)
+            self.listbox_select_item(listbox=self.lstRFindoutmore, varstr=self.var_ent_rfindoutmore)
         self.lstHeadwords.bind('<<ListboxSelect>>', on_listbox_select_lstHeadwords)
         self.lstFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstFindoutmore)
         self.lstRFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstRFindoutmore)
 
-        self.showall_headwords(listbox=self.lstHeadwords)
+        self.listbox_showall_headwords(listbox=self.lstHeadwords)
 
         logging.info('LEAVE')
 
@@ -261,16 +274,16 @@ class YoesApplication(tk.Frame):
         self.db.db_close()
         logging.debug('LEAVE')
 
-    def showall_headwords(self, listbox, anchorstr=None):
+    def listbox_showall_headwords(self, listbox, anchorstr=None):
         logging.info('ENTER: %s, %s', anchorstr, listbox.winfo_name())
-        rows = self.showkey_headwords(listbox, None)
+        rows = self.listbox_showkey_headwords(listbox, None)
 
         if anchorstr != None:
             index = rows.index(tuple([anchorstr]))
             listbox.see(index)
         logging.debug('LEAVE')
 
-    def showkey_headwords(self, listbox, keystr=None):
+    def listbox_showkey_headwords(self, listbox, keystr=None):
         logging.info('ENTER: %s, %s', keystr, listbox.winfo_name())
         rows = self.db.query_headwords_bykey(keystr)
 
@@ -281,7 +294,7 @@ class YoesApplication(tk.Frame):
         return rows
         logging.debug('LEAVE')
 
-    def select_listbox_item(self, listbox, varstr):
+    def listbox_select_item(self, listbox, varstr):
         logging.info('ENTER: %s, %s', varstr.get(), listbox.winfo_name())
         cursel_headword = listbox.curselection()
         if cursel_headword == ():
@@ -296,6 +309,11 @@ class YoesApplication(tk.Frame):
             for row in rows:
                 self.lstFindoutmore.insert(tk.END, row[0])
 
+            rrows = self.db.query_from_headwords(curstr_headword)
+            self.lstRFindoutmore.delete(0, tk.END)
+            for rrow in rrows:
+                self.lstRFindoutmore.insert(tk.END, rrow[0])
+
         self.display_type()
         logging.debug('LEAVE')
 
@@ -303,21 +321,26 @@ class YoesApplication(tk.Frame):
         logging.debug('ENTER')
         curstr_headword = self.var_ent_headword.get() 
         curstr_findoutmore = self.var_ent_findoutmore.get()
+        curstr_rfindoutmore = self.var_ent_rfindoutmore.get()
 
         row = self.db.query_type(curstr_headword, curstr_findoutmore)
-
         if row == None:
             self.var_opt_type.set('')
         else:
             self.var_opt_type.set(list(self.OPTION_LIST_TYPE.keys())[row[0]])
+
+        rrow = self.db.query_type(curstr_rfindoutmore, curstr_headword)
+        if rrow == None:
+            self.var_opt_rtype.set('')
+        else:
+            self.var_opt_rtype.set(list(self.OPTION_LIST_TYPE.keys())[rrow[0]])
         logging.debug('LEAVE')
 
-    def commit_modification(self):
+    def commit_modification(self, var_from, var_to, var_type):
         logging.debug('ENTER')
         findoutmore = [
-            self.OPTION_LIST_TYPE[self.var_opt_type.get()], 
-            self.var_ent_headword.get(), 
-            self.var_ent_findoutmore.get()]
+            self.OPTION_LIST_TYPE[var_type.get()], 
+            var_from.get(), var_to.get()]
         logging.info('findoutmore: %s', findoutmore)
         self.db.insert_findoutmore(findoutmore)
         self.db.db_save()
