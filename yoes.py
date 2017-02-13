@@ -63,21 +63,6 @@ class DbStorage():
         logging.info('CREATE VIEW V_FINDOUTMORE')
         logging.debug('LEAVE')
 
-    def insert_headword(self, headword):
-        logging.debug('ENTER: %s', headword)
-        self.__db.execute('''INSERT OR REPLACE INTO HEADWORDS VALUES(?);''', [headword])
-        logging.info('headword added: %s', headword)
-        logging.debug('LEAVE')
-
-    def insert_findoutmore(self, findoutmore):
-        logging.debug('ENTER: %s', findoutmore)
-        self.__db.execute('''INSERT OR REPLACE INTO FINDOUTMORE
-            SELECT FROM_ID, TO_ID, ? FROM FINDOUTMORE, HEADWORDS H1, HEADWORDS H2
-            WHERE FROM_ID = H1.ROWID AND TO_ID = H2.ROWID
-            AND H1.HEADWORD = ? AND H2.HEADWORD = ?;''', findoutmore)
-        logging.info('findoutmore added: %s', findoutmore)
-        logging.debug('LEAVE')
-
     def query_headwords_bykey(self, key=None):
         logging.info('ENTER: %s', key)
         if key == None or key == '':
@@ -118,6 +103,14 @@ class DbStorage():
         logging.debug('LEAVE')
         return rows
 
+    def query_level(self, headword):
+        logging.info('ENTER: %s', headword)
+        cursor = self.__db.execute('''SELECT LEVEL FROM HEADWORDS WHERE HEADWORD = ?;''', [headword])
+        row = cursor.fetchone()
+        logging.info('row: %s', row)
+        logging.debug('LEAVE')
+        return row
+
     def query_type(self, from_headword, to_headword):
         logging.info('ENTER: %s -> %s', from_headword, to_headword)
         cursor = self.__db.execute('''SELECT TYPE_ID FROM V_FINDOUTMORE
@@ -126,6 +119,35 @@ class DbStorage():
         logging.info('row: %s', row)
         logging.debug('LEAVE')
         return row
+
+    def insert_headword(self, headword, level=-1):
+        logging.debug('ENTER: %s %s', headword, level)
+        self.__db.execute('''INSERT OR REPLACE INTO HEADWORDS VALUES(?, ?);''', [headword, level])
+        logging.info('headword added: %s, %s', headword, level)
+        logging.debug('LEAVE')
+
+    def update_level(self, headword, level):
+        logging.debug('ENTER: %s %s', headword, level)
+        self.__db.execute('''UPDATE OR ROLLBACK HEADWORDS SET LEVEL = ? WHERE HEADWORD = ?;''', [level, headword])
+        logging.info('headword updated: %s, %s', headword, level)
+        logging.debug('LEAVE')
+
+    def insert_findoutmore(self, from_name, to_name, type_id):
+        logging.debug('ENTER: %s -> %s : %s', from_name, to_name, type_id)
+        self.__db.execute('''INSERT OR REPLACE INTO FINDOUTMORE
+            SELECT FROM_ID, TO_ID, ? FROM FINDOUTMORE, HEADWORDS H1, HEADWORDS H2
+            WHERE FROM_ID = H1.ROWID AND TO_ID = H2.ROWID
+            AND H1.HEADWORD = ? AND H2.HEADWORD = ?;''', [type_id, from_name, to_name])
+        logging.info('findoutmore added: %s -> %s : %s', from_name, to_name, type_id)
+        logging.debug('LEAVE')
+
+    def remove_findoutmore(self, from_name, to_name):
+        logging.debug('ENTER: %s -> %s', from_name, to_name)
+        self.__db.execute('''DELETE FROM FINDOUTMORE WHERE 
+            FROM_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?) AND 
+            TO_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?);''', [from_name, to_name])
+        logging.info('findoutmore removed: %s -> %s', from_name, to_name)
+        logging.debug('LEAVE')
 
 class TxtfileStorage:
     def __init__(self, db):
@@ -217,22 +239,22 @@ class YoesApplication(tk.Frame):
         self.lstRFindoutmore = tk.Listbox(self, name='lstRFindoutmore')
         self.lstRFindoutmore.grid(row=1, column=0)
 
-        self.OPTION_LIST_TYPE = dict(Undefined=0, Depends=1, RDepends=2)
+        self.OPTION_TYPE_LIST = dict(Undefined=0, Depends=1, SubClass=2, RDepends=-1)
         self.var_opt_type = tk.StringVar()
-        self.optType = tk.OptionMenu(self, self.var_opt_type, *self.OPTION_LIST_TYPE.keys())
+        self.optType = tk.OptionMenu(self, self.var_opt_type, *self.OPTION_TYPE_LIST.keys())
         self.optType.grid(row=2, column=2)
 
         self.var_opt_rtype = tk.StringVar()
-        self.optRType = tk.OptionMenu(self, self.var_opt_rtype, *self.OPTION_LIST_TYPE.keys())
+        self.optRType = tk.OptionMenu(self, self.var_opt_rtype, *self.OPTION_TYPE_LIST.keys())
         self.optRType.grid(row=2, column=0)
 
         def on_buttoncommand_btnCommit():
-            self.commit_modification(self.var_ent_headword, self.var_ent_findoutmore, self.var_opt_type)
+            self.commit_findoutmore_modification(self.var_ent_headword, self.var_ent_findoutmore, self.var_opt_type)
         self.btnCommit = tk.Button(self, text='Commit', command=on_buttoncommand_btnCommit)
         self.btnCommit.grid(row=3, column=2)
 
         def on_buttoncommand_btnRCommit():
-            self.commit_modification(self.var_ent_rfindoutmore, self.var_ent_headword, self.var_opt_rtype)
+            self.commit_findoutmore_modification(self.var_ent_rfindoutmore, self.var_ent_headword, self.var_opt_rtype)
         self.btnRCommit = tk.Button(self, text='Commit', command=on_buttoncommand_btnRCommit)
         self.btnRCommit.grid(row=3, column=0)
 
@@ -266,10 +288,21 @@ class YoesApplication(tk.Frame):
         self.lstFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstFindoutmore)
         self.lstRFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstRFindoutmore)
 
-        self.trv = ttk.Treeview(self)
-        self.trv.grid(row=0, column=3, rowspan=4, columnspan=4)
+        self.trvHierarchy = ttk.Treeview(self)
+        self.trvHierarchy.grid(row=0, column=3, rowspan=4, columnspan=4)
+
+        self.OPTION_LEVEL_LIST = dict(Root=0, First=1, Second=2, Undefined=-1)
+        self.var_opt_level = tk.StringVar()
+        self.optLevel = tk.OptionMenu(self, self.var_opt_level, *self.OPTION_LEVEL_LIST.keys())
+        self.optLevel.grid(row=2, column=1)
+
+        def on_buttoncommand_btnUpdate():
+            self.update_headword_level()
+        self.btnUpdate = tk.Button(self, text='Update', command=on_buttoncommand_btnUpdate)
+        self.btnUpdate.grid(row=3, column=1)
 
         self.listbox_showall_headwords(listbox=self.lstHeadwords)
+        self.display_hierarchy()
 
         logging.info('LEAVE')
 
@@ -318,6 +351,8 @@ class YoesApplication(tk.Frame):
             for rrow in rrows:
                 self.lstRFindoutmore.insert(tk.END, rrow[0])
 
+            self.display_level()
+
         self.display_type()
         logging.debug('LEAVE')
 
@@ -331,24 +366,53 @@ class YoesApplication(tk.Frame):
         if row == None:
             self.var_opt_type.set('')
         else:
-            self.var_opt_type.set(list(self.OPTION_LIST_TYPE.keys())[row[0]])
+            self.var_opt_type.set(list(self.OPTION_TYPE_LIST.keys())[row[0]])
 
         rrow = self.db.query_type(curstr_rfindoutmore, curstr_headword)
         if rrow == None:
             self.var_opt_rtype.set('')
         else:
-            self.var_opt_rtype.set(list(self.OPTION_LIST_TYPE.keys())[rrow[0]])
+            self.var_opt_rtype.set(list(self.OPTION_TYPE_LIST.keys())[rrow[0]])
         logging.debug('LEAVE')
 
-    def commit_modification(self, var_from, var_to, var_type):
+    def display_level(self):
         logging.debug('ENTER')
-        findoutmore = [
-            self.OPTION_LIST_TYPE[var_type.get()], 
-            var_from.get(), var_to.get()]
-        logging.info('findoutmore: %s', findoutmore)
-        self.db.insert_findoutmore(findoutmore)
+        curstr_headword = self.var_ent_headword.get() 
+
+        row = self.db.query_level(curstr_headword)
+        if row == None:
+            self.var_opt_level.set('')
+        else:
+            self.var_opt_level.set(list(self.OPTION_LEVEL_LIST.keys())[row[0]])
+        logging.debug('LEAVE')
+
+    def commit_findoutmore_modification(self, var_from, var_to, var_type):
+        logging.debug('ENTER')
+        from_name = var_from.get()
+        to_name = var_to.get()
+        type_id = self.OPTION_TYPE_LIST[var_type.get()]
+        logging.info('%s -> %s : %s', from_name, to_name, type_id)
+        if type_id != -1:
+            self.db.insert_findoutmore(from_name, to_name, type_id)
+        else:
+            self.db.insert_findoutmore(to_name, from_name, 0) # insert new depend
+            self.db.remove_findoutmore(from_name, to_name) # remove old depend
         self.db.db_save()
         logging.debug('LEAVE')
+
+    def update_headword_level(self):
+        logging.debug('ENTER')
+        headword = self.var_ent_headword.get()
+        level = self.OPTION_LEVEL_LIST[self.var_opt_level.get()]
+        logging.info('%s : %s', headword, level)
+        self.db.update_level(headword, level)
+        self.db.db_save()
+
+        self.display_hierarchy()
+        logging.debug('LEAVE')
+
+    def display_hierarchy(self):
+        pass
 
 app = YoesApplication()
 app.mainloop()
