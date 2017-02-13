@@ -184,58 +184,77 @@ class YoesApplication(tk.Frame):
         logging.debug('LEAVE Application.__init__()')
     
     def create_widgets(self):
-        logging.debug('ENTER')
+        logging.info('ENTER')
 
         self.var_ent_headword = tk.StringVar()
         self.entHeadword = tk.Entry(self, name='entHeadword', textvariable=self.var_ent_headword)
-        self.entHeadword.grid()
+        self.entHeadword.grid(row=0, column=1)
 
         self.lstHeadwords = tk.Listbox(self, name='lstHeadwords')
-        self.lstHeadwords.grid()
+        self.lstHeadwords.grid(row=1, column=1)
 
         self.var_ent_findoutmore = tk.StringVar()
         self.entFindoutmore = tk.Entry(self, name='entFindoutmore', textvariable=self.var_ent_findoutmore)
-        self.entFindoutmore.grid()
+        self.entFindoutmore.grid(row=0, column=2)
 
         self.lstFindoutmore = tk.Listbox(self, name='lstFindoutmore')
-        self.lstFindoutmore.grid()
+        self.lstFindoutmore.grid(row=1, column=2)
+
+        self.var_ent_rfindoutmore = tk.StringVar()
+        self.entRFindoutmore = tk.Entry(self, name='entRFindoutmore', textvariable=self.var_ent_rfindoutmore)
+        self.entRFindoutmore.grid(row=0, column=0)
+
+        self.lstRFindoutmore = tk.Listbox(self, name='lstRFindoutmore')
+        self.lstRFindoutmore.grid(row=1, column=0)
 
         self.OPTION_LIST_TYPE = dict(Undefined=0, Depends=1, RDepends=2)
         self.var_opt_type = tk.StringVar()
         self.optType = tk.OptionMenu(self, self.var_opt_type, *self.OPTION_LIST_TYPE.keys())
-        self.optType.grid()
+        self.optType.grid(row=2, column=2)
 
-        def on_buttonrelease_optType(event):
-            self.commit_modification()
-        self.optType.bind('<ButtonRelease>', on_buttonrelease_optType)
+        self.var_opt_rtype = tk.StringVar()
+        self.optRType = tk.OptionMenu(self, self.var_opt_rtype, *self.OPTION_LIST_TYPE.keys())
+        self.optRType.grid(row=2, column=0)
 
         self.btnCommit = tk.Button(self, text='Commit', command=self.commit_modification)
-        self.btnCommit.grid()
+        self.btnCommit.grid(row=3, column=2)
+
+        self.btnRCommit = tk.Button(self, text='Commit', command=self.commit_modification)
+        self.btnRCommit.grid(row=3, column=0)
 
         def on_keyrelease_entHeadwords(event):
             self.showkey_headwords(listbox=self.lstHeadwords, keystr=self.var_ent_headword.get())
         def on_keyrelease_entFindoutmore(event):
             self.showkey_headwords(listbox=self.lstFindoutmore, keystr=self.var_ent_findoutmore.get())
+        def on_keyrelease_entRFindoutmore(event):
+            self.showkey_headwords(listbox=self.lstRFindoutmore, keystr=self.var_ent_rfindoutmore.get())
         self.entHeadword.bind('<KeyRelease>', on_keyrelease_entHeadwords)
         self.entFindoutmore.bind('<KeyRelease>', on_keyrelease_entFindoutmore)
+        self.entRFindoutmore.bind('<KeyRelease>', on_keyrelease_entRFindoutmore)
 
         def on_keypress_escape_lstHeadwords(event):
             self.showall_headwords(listbox=self.lstHeadwords, anchorstr=self.var_ent_headword.get())
         def on_keypress_escape_lstFindoutmore(event):
             self.showall_headwords(listbox=self.lstFindoutmore, anchorstr=self.var_ent_findoutmore.get())
+        def on_keypress_escape_lstRFindoutmore(event):
+            self.showall_headwords(listbox=self.lstRFindoutmore, anchorstr=self.var_ent_rfindoutmore.get())
         self.lstHeadwords.bind('<KeyPress-Escape>'  , on_keypress_escape_lstHeadwords)
         self.lstFindoutmore.bind('<KeyPress-Escape>', on_keypress_escape_lstFindoutmore)
+        self.lstRFindoutmore.bind('<KeyPress-Escape>', on_keypress_escape_lstRFindoutmore)
 
         def on_listbox_select_lstHeadwords(event):
-            self.select_headword(listbox=self.lstHeadwords, varstr=self.var_ent_headword)
+            self.select_listbox_item(listbox=self.lstHeadwords, varstr=self.var_ent_headword)
         def on_listbox_select_lstFindoutmore(event):
-            self.select_headword(listbox=self.lstFindoutmore, varstr=self.var_ent_findoutmore)
+            self.select_listbox_item(listbox=self.lstFindoutmore, varstr=self.var_ent_findoutmore)
+        def on_listbox_select_lstRFindoutmore(event):
+            self.select_listbox_item(listbox=self.lstRFindoutmore, varstr=self.var_ent_rfindoutmore)
         self.lstHeadwords.bind('<<ListboxSelect>>', on_listbox_select_lstHeadwords)
         self.lstFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstFindoutmore)
+        self.lstRFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstRFindoutmore)
 
         self.showall_headwords(listbox=self.lstHeadwords)
 
-        logging.debug('LEAVE')
+        logging.info('LEAVE')
 
     def on_destroy(self, event):
         logging.debug('ENTER')
@@ -262,7 +281,7 @@ class YoesApplication(tk.Frame):
         return rows
         logging.debug('LEAVE')
 
-    def select_headword(self, listbox, varstr):
+    def select_listbox_item(self, listbox, varstr):
         logging.info('ENTER: %s, %s', varstr.get(), listbox.winfo_name())
         cursel_headword = listbox.curselection()
         if cursel_headword == ():
@@ -273,16 +292,9 @@ class YoesApplication(tk.Frame):
 
         if listbox == self.lstHeadwords:
             rows = self.db.query_to_headwords(curstr_headword)
-            reflistbox = self.lstFindoutmore
-        else:
-            #rows = self.db.query_from_headwords(curstr_headword)
-            #reflistbox = self.lstHeadwords
-            reflistbox = None
-
-        if reflistbox != None:
-            reflistbox.delete(0, tk.END)
+            self.lstFindoutmore.delete(0, tk.END)
             for row in rows:
-                reflistbox.insert(tk.END, row[0])
+                self.lstFindoutmore.insert(tk.END, row[0])
 
         self.display_type()
         logging.debug('LEAVE')
