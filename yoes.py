@@ -10,6 +10,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import logging
 import sqlite3
+import xmind
 
 LOGGING_FORMAT =        '[%(levelname)5s] %(asctime)s %(msecs)3d <%(process)d:%(thread)d:%(threadName)10s> ' + \
                         '{%(filename)s:%(lineno)4d%(funcName)35s} %(message)s'
@@ -218,6 +219,8 @@ class YoesApplication(tk.Frame):
         #self.txtfile.process_headwords_txtfile('headwords.txt')
         #self.txtfile.process_findoutmore_txtfile('findoutmore.txt')
         #self.db.db_save()
+
+        self.save_xmind()
 
         self.create_widgets()
         logging.debug('LEAVE Application.__init__()')
@@ -454,6 +457,14 @@ class YoesApplication(tk.Frame):
                 logging.info('insert tree node: %s', sub_node_name)
                 self.add_tree_nodes(sub_node_name)
         logging.debug('LEAVE')
+
+    def save_xmind(self):
+        #w = xmind.load("test.xmind") # load an existing file or create a new workbook if nothing is found
+
+        #s1=w.getPrimarySheet() # get the first sheet
+        #s1.setTitle("first sheet") # set its title
+        #r1=s1.getRootTopic() # get the root topic of this sheet
+        #r1.setTitle("we don't care of this sheet") # set its title
 
 app = YoesApplication()
 app.mainloop()
