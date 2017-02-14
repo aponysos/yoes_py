@@ -12,7 +12,7 @@ import logging
 import sqlite3
 
 LOGGING_FORMAT =        '[%(levelname)5s] %(asctime)s %(msecs)3d <%(process)d:%(thread)d:%(threadName)10s> ' + \
-                        '{%(filename)s:%(lineno)4d%(funcName)30s} %(message)s'
+                        '{%(filename)s:%(lineno)4d%(funcName)35s} %(message)s'
 LOGGING_DATE_FORMAT =   '%Y-%m-%d %H:%M:%S'
 
 logging.basicConfig(
@@ -66,11 +66,20 @@ class DbStorage():
     def query_headwords_bykey(self, key=None):
         logging.info('ENTER: %s', key)
         if key == None or key == '':
-            cursor = self.__db.execute('''SELECT * FROM HEADWORDS 
+            cursor = self.__db.execute('''SELECT HEADWORD FROM HEADWORDS 
                 ORDER BY HEADWORD ASC;''')
         else:
-            cursor = self.__db.execute('''SELECT * FROM HEADWORDS WHERE HEADWORD LIKE ?  
+            cursor = self.__db.execute('''SELECT HEADWORD FROM HEADWORDS WHERE HEADWORD LIKE ?  
                 ORDER BY HEADWORD ASC;''', ['%'+key+'%'])
+        rows = cursor.fetchall()
+        logging.info('rows: %s', len(rows))
+        logging.debug('LEAVE')
+        return rows
+
+    def query_headwords_bylevel(self, level):
+        logging.info('ENTER: %s', level)
+        cursor = self.__db.execute('''SELECT * FROM HEADWORDS WHERE LEVEL = ?  
+            ORDER BY HEADWORD ASC;''', [level])
         rows = cursor.fetchall()
         logging.info('rows: %s', len(rows))
         logging.debug('LEAVE')
@@ -126,13 +135,20 @@ class DbStorage():
     def insert_findoutmore(self, from_name, to_name, type_id):
         logging.debug('ENTER: %s -> %s : %s', from_name, to_name, type_id)
         self.__db.execute('''INSERT OR REPLACE INTO FINDOUTMORE
-            SELECT FROM_ID, TO_ID, ? FROM FINDOUTMORE, HEADWORDS H1, HEADWORDS H2
-            WHERE FROM_ID = H1.ROWID AND TO_ID = H2.ROWID
-            AND H1.HEADWORD = ? AND H2.HEADWORD = ?;''', [type_id, from_name, to_name])
+            SELECT H1.ROWID, H2.ROWID, ? FROM HEADWORDS H1, HEADWORDS H2
+            WHERE H1.HEADWORD = ? AND H2.HEADWORD = ?;''', [type_id, from_name, to_name])
         logging.info('findoutmore added: %s -> %s : %s', from_name, to_name, type_id)
         logging.debug('LEAVE')
 
     def remove_findoutmore(self, from_name, to_name):
+        logging.debug('ENTER: %s -> %s', from_name, to_name)
+        self.__db.execute('''DELETE FROM FINDOUTMORE WHERE 
+            FROM_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?) AND 
+            TO_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?);''', [from_name, to_name])
+        logging.info('findoutmore removed: %s -> %s', from_name, to_name)
+        logging.debug('LEAVE')
+
+    def remove_findoutmore_by_fromname_type_id(self, from_name, to_name):
         logging.debug('ENTER: %s -> %s', from_name, to_name)
         self.__db.execute('''DELETE FROM FINDOUTMORE WHERE 
             FROM_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?) AND 
@@ -279,8 +295,9 @@ class YoesApplication(tk.Frame):
         self.lstFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstFindoutmore)
         self.lstRFindoutmore.bind('<<ListboxSelect>>', on_listbox_select_lstRFindoutmore)
 
-        self.trvHierarchy = ttk.Treeview(self)
+        self.trvHierarchy = ttk.Treeview(self, selectmode='extended')
         self.trvHierarchy.grid(row=0, column=3, rowspan=4, columnspan=4)
+        self.trvHierarchy.bind('<<TreeviewSelect>>', self.on_treeview_select)
 
         self.OPTION_LEVEL_LIST = dict(Root=0, First=1, Second=2, Undefined=-1)
         self.var_opt_level = tk.StringVar()
@@ -347,6 +364,10 @@ class YoesApplication(tk.Frame):
         self.display_type()
         logging.debug('LEAVE')
 
+    def on_treeview_select(self, event):
+        cursel = self.trvHierarchy.selection()
+        self.listbox_showall_headwords(self.lstHeadwords, cursel[0])
+
     def display_type(self):
         logging.debug('ENTER')
         curstr_headword = self.var_ent_headword.get() 
@@ -410,11 +431,10 @@ class YoesApplication(tk.Frame):
         logging.debug('ENTER')
         self.trvHierarchy.delete(*self.trvHierarchy.get_children())
 
-        rows = self.db.query_headwords_bykey()
+        rows = self.db.query_headwords_bylevel(0)
         for row in rows:
-            if row[1] == 0:
-                self.trvHierarchy.insert('', 'end', iid=row[0], text=row[0])
-                self.add_tree_nodes(row[0])
+            self.trvHierarchy.insert('', 'end', iid=row[0], text=row[0])
+            self.add_tree_nodes(row[0])
 
         logging.debug('LEAVE')
 
