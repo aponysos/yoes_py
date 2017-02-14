@@ -148,12 +148,12 @@ class DbStorage():
         logging.info('findoutmore removed: %s -> %s', from_name, to_name)
         logging.debug('LEAVE')
 
-    def remove_findoutmore_by_fromname_type_id(self, from_name, to_name):
-        logging.debug('ENTER: %s -> %s', from_name, to_name)
+    def remove_findoutmore_by_fromname_typeid(self, from_name, type_id):
+        logging.debug('ENTER: %s -> * : %s', from_name, type_id)
         self.__db.execute('''DELETE FROM FINDOUTMORE WHERE 
             FROM_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?) AND 
-            TO_ID IN (SELECT ROWID FROM HEADWORDS WHERE HEADWORD = ?);''', [from_name, to_name])
-        logging.info('findoutmore removed: %s -> %s', from_name, to_name)
+            TYPE_ID = ?;''', [from_name, type_id])
+        logging.info('findoutmore removed: %s -> * : %s', from_name, type_id)
         logging.debug('LEAVE')
 
 class TxtfileStorage:
@@ -406,11 +406,16 @@ class YoesApplication(tk.Frame):
         to_name = var_to.get()
         type_id = self.OPTION_TYPE_LIST[var_type.get()]
         logging.info('%s -> %s : %s', from_name, to_name, type_id)
-        if type_id != -1:
-            self.db.insert_findoutmore(from_name, to_name, type_id)
-        else:
-            self.db.insert_findoutmore(to_name, from_name, 0) # insert new depend
+        if type_id == -1: #RDepends
             self.db.remove_findoutmore(from_name, to_name) # remove old depend
+            self.db.insert_findoutmore(to_name, from_name, 0) # insert new depend
+        else:
+            if type_id == 2: #SubClass
+                self.db.remove_findoutmore_by_fromname_typeid(from_name, 2) # remove old subclass
+                self.db.insert_findoutmore(from_name, to_name, 2) # insert new subclass
+            else:
+                self.db.insert_findoutmore(from_name, to_name, type_id)
+
         self.db.db_save()
         logging.debug('LEAVE')
 
@@ -434,18 +439,21 @@ class YoesApplication(tk.Frame):
         rows = self.db.query_headwords_bylevel(0)
         for row in rows:
             self.trvHierarchy.insert('', 'end', iid=row[0], text=row[0])
+            logging.info('insert tree node: %s', row[0])
             self.add_tree_nodes(row[0])
-
         logging.debug('LEAVE')
 
     def add_tree_nodes(self, node_name):
+        logging.debug('ENTER: %s', node_name)
         rows = self.db.query_from_headwords(node_name)
         for row in rows:
             sub_node_name = row[0]
             type_row = self.db.query_type(sub_node_name, node_name)
             if type_row != None and type_row[0] == 2:
                 self.trvHierarchy.insert(node_name, 'end', iid=sub_node_name, text=sub_node_name)
+                logging.info('insert tree node: %s', sub_node_name)
                 self.add_tree_nodes(sub_node_name)
+        logging.debug('LEAVE')
 
 app = YoesApplication()
 app.mainloop()
