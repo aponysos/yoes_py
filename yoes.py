@@ -6,8 +6,8 @@ a proper learning sequence.
 
 import re
 import fileinput
-import tkinter as tk
-import tkinter.ttk as ttk
+import Tkinter as tk
+import ttk
 import logging
 import sqlite3
 
@@ -246,7 +246,7 @@ class YoesApplication(tk.Frame):
         self.lstRFindoutmore = tk.Listbox(self, name='lstRFindoutmore')
         self.lstRFindoutmore.grid(row=1, column=0)
 
-        self.OPTION_TYPE_LIST = dict(Undefined=0, Depends=1, SubClass=2, RDepends=-1)
+        self.OPTION_TYPE_LIST = dict(Undefined=0, Depends=1, SubClass=2, RDepends=3)
         self.var_opt_type = tk.StringVar()
         self.optType = tk.OptionMenu(self, self.var_opt_type, *self.OPTION_TYPE_LIST.keys())
         self.optType.grid(row=2, column=2)
@@ -374,18 +374,24 @@ class YoesApplication(tk.Frame):
         curstr_findoutmore = self.var_ent_findoutmore.get()
         curstr_rfindoutmore = self.var_ent_rfindoutmore.get()
 
-        row = self.db.query_type(curstr_headword, curstr_findoutmore)
-        if row == None:
+        if curstr_headword == '' or curstr_findoutmore == '':
             self.var_opt_type.set('')
         else:
-            self.var_opt_type.set(list(self.OPTION_TYPE_LIST.keys())[row[0]])
+            row = self.db.query_type(curstr_headword, curstr_findoutmore)
+            if row == None:
+                self.var_opt_type.set('')
+            else:
+                self.var_opt_type.set(self.OPTION_TYPE_LIST.keys()[self.OPTION_TYPE_LIST.values().index(row[0])])
 
-        rrow = self.db.query_type(curstr_rfindoutmore, curstr_headword)
-        if rrow == None:
+        if curstr_rfindoutmore == '' or curstr_headword == '':
             self.var_opt_rtype.set('')
         else:
-            self.var_opt_rtype.set(list(self.OPTION_TYPE_LIST.keys())[rrow[0]])
-        logging.debug('LEAVE')
+            rrow = self.db.query_type(curstr_rfindoutmore, curstr_headword)
+            if rrow == None:
+                self.var_opt_rtype.set('')
+            else:
+                self.var_opt_rtype.set(self.OPTION_TYPE_LIST.keys()[self.OPTION_TYPE_LIST.values().index(rrow[0])])
+            logging.debug('LEAVE')
 
     def display_level(self):
         logging.debug('ENTER')
@@ -395,7 +401,7 @@ class YoesApplication(tk.Frame):
         if row == None:
             self.var_opt_level.set('')
         else:
-            self.var_opt_level.set(list(self.OPTION_LEVEL_LIST.keys())[row[0]])
+            self.var_opt_level.set(self.OPTION_LEVEL_LIST.keys()[self.OPTION_LEVEL_LIST.values().index(row[0])])
         logging.debug('LEAVE')
 
     def commit_findoutmore_modification(self, var_from, var_to, var_type):
@@ -406,13 +412,16 @@ class YoesApplication(tk.Frame):
         to_name = var_to.get()
         type_id = self.OPTION_TYPE_LIST[var_type.get()]
         logging.info('%s -> %s : %s', from_name, to_name, type_id)
-        if type_id == -1: #RDepends
+
+        subclass_id = self.OPTION_TYPE_LIST['SubClass']
+        rdepends_id = self.OPTION_TYPE_LIST['RDepends']
+        if type_id == rdepends_id: #RDepends
             self.db.remove_findoutmore(from_name, to_name) # remove old depend
-            self.db.insert_findoutmore(to_name, from_name, 0) # insert new depend
+            self.db.insert_findoutmore(to_name, from_name, rdepends_id) # insert new depend
         else:
-            if type_id == 2: #SubClass
-                self.db.remove_findoutmore_by_fromname_typeid(from_name, 2) # remove old subclass
-                self.db.insert_findoutmore(from_name, to_name, 2) # insert new subclass
+            if type_id == subclass_id: #SubClass
+                self.db.remove_findoutmore_by_fromname_typeid(from_name, subclass_id) # remove old subclass
+                self.db.insert_findoutmore(from_name, to_name, subclass_id) # insert new subclass
             else:
                 self.db.insert_findoutmore(from_name, to_name, type_id)
 
