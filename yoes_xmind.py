@@ -40,13 +40,13 @@ undefined_topic = TopicElement()
 undefined_topic.setTitle("Undefined")
 root_topic.addSubTopic(undefined_topic)
 
-headwors = list()
+headwords = list()
 topics = list()
 
 for row in headwords_rows:
     headword = row[0]
     level = row[1]
-    headwors.append(headword)
+    headwords.append(headword)
 
     topic = TopicElement(None, workbook)
     topic.setTitle(headword)
@@ -61,8 +61,8 @@ for row in findoutmore_rows:
     from_headword = row[0]
     to_headword = row[1]
     type_id = row[2]
-    from_i = headwors.index(from_headword)
-    to_i = headwors.index(to_headword)
+    from_i = headwords.index(from_headword)
+    to_i = headwords.index(to_headword)
     from_topic = topics[from_i]
     to_topic = topics[to_i]
 
