@@ -6,8 +6,8 @@ a proper learning sequence.
 
 import re
 import fileinput
-import Tkinter as tk
-import ttk
+import Tkinter as tk    # Python2: Tkinter first letter is uppercase in Python2
+import ttk              # Python2: ttk not supported in Python3
 import logging
 import sqlite3
 
